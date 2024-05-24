@@ -1,56 +1,94 @@
 import streamlit as st
+import pandas as pd
 import requests
+import matplotlib.pyplot as plt
 
-# Function to fetch data from the Adjust API
-def fetch_adjust_data(endpoint, api_token, params=None):
-    headers = {
-        "Authorization": f"Bearer {api_token}"
+# Adjust API endpoint (replace with actual URL)
+api_url = "https://dash.adjust.com/control-center/reports-service/report"
+
+# Placeholder for your API token (obtain from Adjust dashboard)
+api_token = "sJFzfMUwRVjGBEjhX-i2"
+
+# Available dimensions and metrics (adjust as needed)
+dimensions = ["app", "date", "partner", "campaign"]
+metrics = ["installs", "revenue", "cost"]
+
+def fetch_data(start_date, end_date, partner=None, campaign=None):
+    """Fetches data from the Adjust Report Service API based on filters.
+
+    Args:
+        start_date (str): Start date in YYYY-MM-DD format.
+        end_date (str): End date in YYYY-MM-DD format.
+        partner (str, optional): Partner name to filter by. Defaults to None.
+        campaign (str, optional): Campaign name to filter by. Defaults to None.
+
+    Returns:
+        pandas.DataFrame: Dataframe containing the fetched data.
+    """
+
+    filters = {
+        "dimensions": ",".join(dimensions),
+        "metrics": ",".join(metrics),
+        "date_period": f"{start_date}:{end_date}",
     }
 
-    response = requests.get(endpoint, headers=headers, params=params)
+    if partner:
+        filters["partner__in"] = partner
+
+    if campaign:
+        filters["campaign__in"] = campaign
+
+    headers = {"Authorization": f"Bearer {api_token}"}
+    response = requests.get(api_url, headers=headers, params=filters)
 
     if response.status_code == 200:
-        return response.json(), None
+        data = response.json()
+        return pd.DataFrame(data["rows"])
     else:
-        return None, f"Failed to fetch data. Status code: {response.status_code}\nError: {response.text}"
+        st.error(f"Error fetching data: {response.status_code}")
+        return None
 
-# Streamlit application
-st.title("Adjust API Data Fetcher")
-st.write("This app fetches data from the Adjust API using the provided endpoint and API token.")
+def plot_data(data, metric):
+    """Plots the selected metric as a curve graph using Matplotlib.
 
-# User inputs for API endpoint and token
-endpoint = st.text_input("API Endpoint", "https://dash.adjust.com/control-center/reports-service/filters_data")
-api_token = st.text_input("API Token", "sJFzfMUwRVjGBEjhX-i2")
+    Args:
+        data (pandas.DataFrame): Dataframe containing fetched data.
+        metric (str): Metric to plot (e.g., "installs", "revenue", "cost").
+    """
 
-# Input fields for query parameters
-required_filters = st.text_input("Required Filters (comma separated)", "overview_metrics,cost_metrics")
-section = st.selectbox("Section", ["overview", "cost", "sessions", "clicks", "installs", "events"])
+    dates = data["date"]
+    values = data[metric]
 
-# Optional search terms
-overview_metrics_contains = st.text_input("Overview Metrics Contains (optional)")
-cost_metrics_contains = st.text_input("Cost Metrics Contains (optional)")
+    plt.figure(figsize=(10, 6))
+    plt.plot(dates, values)
+    plt.xlabel("Date")
+    plt.ylabel(metric)
+    plt.title(f"{metric} over Time")
+    plt.xticks(rotation=45)  # Rotate x-axis labels for readability
+    st.pyplot()
 
-# Fetch data button
+st.title("Adjust Data Fetcher")
+
+# Date filter
+col1, col2 = st.columns(2)
+with col1:
+    start_date = st.date_input("Start Date", min_history=30)
+with col2:
+    end_date = st.date_input("End Date")
+
+# Partner filter (optional)
+partner_filter = st.selectbox("Partner Filter (Optional)", [""] + ["Partner 1", "Partner 2", "..."], key="partner_filter")
+
+# Campaign filter (optional)
+campaign_filter = st.selectbox("Campaign Filter (Optional)", [""] + ["Campaign A", "Campaign B", "..."], key="campaign_filter")
+
+# Select metric for curve graph
+metric_to_plot = st.selectbox("Select Metric for Curve Graph", metrics)
+
+# Submit button
 if st.button("Fetch Data"):
-    with st.spinner("Fetching data..."):
-        params = {
-            "required_filters": required_filters,
-            "section": section
-        }
+    data = fetch_data(start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"), partner=partner_filter, campaign=campaign_filter)
 
-        if overview_metrics_contains:
-            params["overview_metrics__contains"] = overview_metrics_contains
-
-        if cost_metrics_contains:
-            params["cost_metrics__contains"] = cost_metrics_contains
-
-        data, error = fetch_adjust_data(endpoint, api_token, params)
-        if data:
-            st.success("Data fetched successfully!")
-            st.json(data)
-        else:
-            st.error(error)
-
-st.write("Click the button above to fetch data from the Adjust API.")
-
-
+    if data is not None:
+        st.dataframe(data.head())  # Display a preview of the data
+        plot_data(data, metric_to_plot)
