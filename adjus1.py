@@ -1,37 +1,36 @@
 import streamlit as st
 import requests
-import json
 
-# Your Adjust API endpoint and token
-API_ENDPOINT = "https://dash.adjust.com/control-center/reports-service/<endpoint>"
-API_TOKEN = "sJFzfMUwRVjGBEjhX-i2"
-
-def fetch_adjust_data():
+# Function to fetch data from the Adjust API
+def fetch_adjust_data(endpoint, api_token):
     headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
+        "Authorization": f"Bearer {api_token}"
     }
 
-    response = requests.get(API_ENDPOINT, headers=headers)
+    response = requests.get(endpoint, headers=headers)
 
     if response.status_code == 200:
-        data = response.json()
-        return data
+        return response.json(), None
     else:
-        st.error(f"Failed to fetch data. Status code: {response.status_code}")
-        st.error(response.text)
-        return None
+        return None, f"Failed to fetch data. Status code: {response.status_code}\nError: {response.text}"
 
+# Streamlit application
 st.title("Adjust API Data Fetcher")
 st.write("This app fetches data from the Adjust API using the provided endpoint and API token.")
+
+# User inputs for API endpoint and token
+endpoint = st.text_input("API Endpoint", "https://dash.adjust.com/control-center/reports-service/<endpoint>")
+api_token = st.text_input("API Token", "sJFzfMUwRVjGBEjhX-i2")
 
 # Fetch data button
 if st.button("Fetch Data"):
     with st.spinner("Fetching data..."):
-        data = fetch_adjust_data()
+        data, error = fetch_adjust_data(endpoint, api_token)
         if data:
             st.success("Data fetched successfully!")
             st.json(data)
         else:
-            st.error("Failed to fetch data. Please check the API endpoint and token.")
+            st.error(error)
 
 st.write("Click the button above to fetch data from the Adjust API.")
+
